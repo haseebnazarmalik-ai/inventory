@@ -1,0 +1,15 @@
+{
+  "name": "GMS Material Tracker",
+  "short_name": "GMS Master",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#1a237e",
+  "theme_color": "#1a237e",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2897/2897785.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
