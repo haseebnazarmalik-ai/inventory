@@ -1,14 +1,4 @@
-        if (existing && !bulkMode) { document.getElementById('loadingOverlay').style.display = "none"; document.getElementById('conflictMsg').innerText = `Conflict: ${mat.code}`; conflictModal.show(); } 
-        else {
-            if (existing && (bulkMode === 'replaceAll' || bulkMode === 'overwrite')) await updateDoc(doc(db, "materials", existing.id), mat);
-            else if (!existing) await addDoc(materialsRef, mat);
-            queueIndex++; processQueue();
-        }
-    }
-    window.resolveConflict = (type) => { conflictModal.hide(); bulkMode = type; processQueue(); };
-</script>
-</body>
-</html>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
