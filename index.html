@@ -11,17 +11,18 @@
         .navbar { background-color: #1a237e; color: white; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
         .card { border: none; border-radius: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 20px; }
         .btn-primary { background-color: #1a237e; border: none; }
-        .search-bar { border-radius: 30px; padding: 12px 25px; border: 2px solid #e0e0e0; transition: 0.3s; }
+        .search-bar { border-radius: 30px; padding: 12px 25px; border: 2px solid #e0e0e0; transition: 0.3s; font-size: 16px; }
         .search-bar:focus { border-color: #1a237e; box-shadow: none; }
         .table-container { background: white; border-radius: 15px; overflow: hidden; }
         #loadingOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; }
+        .sticky-search { position: sticky; top: 10px; z-index: 100; }
     </style>
 </head>
 <body>
 
 <div id="loadingOverlay">
     <div class="spinner-border text-primary" role="status"></div>
-    <p class="mt-2 fw-bold text-primary">Syncing with Firebase... Please wait.</p>
+    <p class="mt-2 fw-bold text-primary">Syncing Data... Please wait.</p>
 </div>
 
 <nav class="navbar py-3 mb-4">
@@ -59,7 +60,6 @@
 
             <div class="card p-4 border-success border-2">
                 <h5 class="text-success mb-3"><i class="fas fa-file-excel me-2"></i> Excel/CSV Sync</h5>
-                <p class="small text-muted">Upload file to check & sync with Cloud.</p>
                 <input type="file" id="excelFile" class="form-control mb-3" accept=".xlsx, .xls, .csv">
                 <button class="btn btn-success w-100" id="uploadBtn">
                     <i class="fas fa-sync-alt me-2"></i> Start Sync
@@ -68,7 +68,7 @@
         </div>
 
         <div class="col-lg-8">
-            <div class="mb-3">
+            <div class="mb-3 sticky-search">
                 <input type="text" id="searchInput" class="form-control search-bar shadow-sm" placeholder="Search by Code or Item Name...">
             </div>
 
@@ -83,9 +83,11 @@
                                 <th class="text-end">Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="materialsTableBody">
-                            </tbody>
+                        <tbody id="materialsTableBody"></tbody>
                     </table>
+                </div>
+                <div id="viewAllNote" class="p-2 text-center small text-muted border-top d-none">
+                    Showing top 100 results. Use search to find specific items.
                 </div>
             </div>
         </div>
@@ -101,11 +103,11 @@
             <div class="modal-body">
                 <p id="conflictMsg"></p>
                 <div class="d-grid gap-2">
-                    <button class="btn btn-primary" onclick="resolveConflict('overwrite')">Overwrite (Update This)</button>
-                    <button class="btn btn-outline-secondary" onclick="resolveConflict('skip')">Skip This Item</button>
+                    <button class="btn btn-primary" onclick="resolveConflict('overwrite')">Overwrite</button>
+                    <button class="btn btn-outline-secondary" onclick="resolveConflict('skip')">Skip</button>
                     <hr>
-                    <button class="btn btn-danger" onclick="resolveConflict('replaceAll')">Replace All Duplicates</button>
-                    <button class="btn btn-dark" onclick="resolveConflict('skipAll')">Skip All Duplicates</button>
+                    <button class="btn btn-danger" onclick="resolveConflict('replaceAll')">Replace All</button>
+                    <button class="btn btn-dark" onclick="resolveConflict('skipAll')">Skip All</button>
                 </div>
             </div>
         </div>
@@ -121,7 +123,6 @@
         getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, orderBy, onSnapshot 
     } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
-    // Firebase Configuration
     const firebaseConfig = {
         apiKey: "AIzaSyBwNhSD5aWhtDTpqWXE0RF0Rbyr5xCCrK0",
         authDomain: "gms-tracker.firebaseapp.com",
@@ -142,14 +143,13 @@
     let bulkMode = null; 
     const conflictModal = new bootstrap.Modal(document.getElementById('conflictModal'));
 
-    // 1. Live Data Sync
     onSnapshot(query(materialsRef, orderBy("code", "asc")), (snapshot) => {
         allMaterials = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
         document.getElementById('itemCount').innerText = `Total Items: ${allMaterials.length}`;
-        renderTable(allMaterials);
+        renderTable(allMaterials.slice(0, 100)); // Pehle sirf 100 dikhao
+        if(allMaterials.length > 100) document.getElementById('viewAllNote').classList.remove('d-none');
     });
 
-    // 2. Display Table
     function renderTable(data) {
         const tbody = document.getElementById('materialsTableBody');
         tbody.innerHTML = "";
@@ -159,7 +159,7 @@
                     <td class="fw-bold text-primary">${item.code}</td>
                     <td>${item.description}</td>
                     <td><span class="badge bg-light text-dark border">${item.uom}</span></td>
-                    <td class="text-end">
+                    <td class="text-end text-nowrap">
                         <button class="btn btn-sm text-warning action-edit" data-id="${item.id}"><i class="fas fa-edit"></i></button>
                         <button class="btn btn-sm text-danger action-delete" data-id="${item.id}"><i class="fas fa-trash"></i></button>
                     </td>
@@ -171,16 +171,19 @@
         document.querySelectorAll('.action-delete').forEach(b => b.onclick = () => deleteItem(b.dataset.id));
     }
 
-    // 3. Search Logic
     document.getElementById('searchInput').oninput = (e) => {
         const term = e.target.value.toLowerCase();
+        // Poore data mein search karega
         const filtered = allMaterials.filter(m => 
             m.code.toLowerCase().includes(term) || m.description.toLowerCase().includes(term)
         );
-        renderTable(filtered);
+        // Result mein top 100 hi dikhayega performance ke liye
+        renderTable(filtered.slice(0, 100));
+        
+        const note = document.getElementById('viewAllNote');
+        if(filtered.length > 100) note.classList.remove('d-none'); else note.classList.add('d-none');
     };
 
-    // 4. Form Submission
     document.getElementById('materialForm').onsubmit = async (e) => {
         e.preventDefault();
         const id = document.getElementById('editId').value;
@@ -189,32 +192,26 @@
             description: document.getElementById('mDesc').value.trim(),
             uom: document.getElementById('mUom').value.trim()
         };
-
         try {
             if (id) {
                 await updateDoc(doc(db, "materials", id), data);
-                alert("Updated!");
             } else {
                 if(allMaterials.find(m => m.code === data.code)) return alert("Code already exists!");
                 await addDoc(materialsRef, data);
-                alert("Saved!");
             }
             resetForm();
         } catch (err) { alert(err.message); }
     };
 
-    // 5. Excel Sync Logic
     document.getElementById('uploadBtn').onclick = () => {
         const file = document.getElementById('excelFile').files[0];
-        if (!file) return alert("Please select a file!");
-
+        if (!file) return alert("Select file!");
         const reader = new FileReader();
         reader.onload = (e) => {
             const data = new Uint8Array(e.target.result);
             const workbook = XLSX.read(data, { type: 'array' });
             excelQueue = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
-            queueIndex = 0;
-            bulkMode = null;
+            queueIndex = 0; bulkMode = null;
             document.getElementById('loadingOverlay').style.display = "flex";
             processQueue();
         };
@@ -224,42 +221,32 @@
     async function processQueue() {
         if (queueIndex >= excelQueue.length) {
             document.getElementById('loadingOverlay').style.display = "none";
-            alert("All items synced successfully!");
-            return;
+            alert("Sync Complete!"); return;
         }
-
         const row = excelQueue[queueIndex];
-        // Smart mapping for different file headers
         const material = {
             code: String(row['Code'] || row['Code '] || row['code'] || "").trim(),
             description: String(row['Item'] || row['Material Name'] || row['description'] || "").trim(),
             uom: String(row['UOM'] || row['uom'] || "").trim()
         };
-
         if (!material.code) { queueIndex++; processQueue(); return; }
-
         const existing = allMaterials.find(m => m.code === material.code);
-
         if (existing && !bulkMode) {
             document.getElementById('loadingOverlay').style.display = "none";
-            document.getElementById('conflictMsg').innerText = `Code "${material.code}" exists. Overwrite?`;
+            document.getElementById('conflictMsg').innerText = `Code "${material.code}" exists. Update?`;
             conflictModal.show();
-        } else {
-            await handleSave(material, existing);
-        }
+        } else { await handleSave(material, existing); }
     }
 
     async function handleSave(material, existing) {
         if (existing && bulkMode === 'skipAll') { queueIndex++; processQueue(); return; }
-        
         try {
             if (existing && (bulkMode === 'replaceAll' || bulkMode === 'overwrite')) {
                 await updateDoc(doc(db, "materials", existing.id), material);
             } else if (!existing) {
                 await addDoc(materialsRef, material);
             }
-            queueIndex++;
-            processQueue();
+            queueIndex++; processQueue();
         } catch (err) { console.error(err); }
     }
 
@@ -267,7 +254,6 @@
         conflictModal.hide();
         document.getElementById('loadingOverlay').style.display = "flex";
         if (type === 'replaceAll' || type === 'skipAll') bulkMode = type;
-        
         const row = excelQueue[queueIndex];
         const material = {
             code: String(row['Code'] || row['Code '] || "").trim(),
@@ -275,19 +261,13 @@
             uom: String(row['UOM'] || "").trim()
         };
         const existing = allMaterials.find(m => m.code === material.code);
-
         if (type === 'overwrite' || type === 'replaceAll') {
-            updateDoc(doc(db, "materials", existing.id), material).then(() => {
-                queueIndex++; processQueue();
-            });
-        } else {
-            queueIndex++; processQueue();
-        }
+            updateDoc(doc(db, "materials", existing.id), material).then(() => { queueIndex++; processQueue(); });
+        } else { queueIndex++; processQueue(); }
     };
 
-    // Helpers
     async function deleteItem(id) {
-        if (confirm("Delete this material?")) await deleteDoc(doc(db, "materials", id));
+        if (confirm("Delete?")) await deleteDoc(doc(db, "materials", id));
     }
 
     function editItem(id) {
@@ -296,8 +276,8 @@
         document.getElementById('mDesc').value = item.description;
         document.getElementById('mUom').value = item.uom;
         document.getElementById('editId').value = id;
-        document.getElementById('formTitle').innerText = "Edit Material";
-        document.getElementById('submitBtn').innerText = "Update Now";
+        document.getElementById('formTitle').innerText = "Edit Mode";
+        document.getElementById('submitBtn').innerText = "Update";
         document.getElementById('cancelEdit').classList.remove('d-none');
         window.scrollTo(0,0);
     }
